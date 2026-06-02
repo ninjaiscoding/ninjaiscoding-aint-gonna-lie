@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ain't Gonna Lie - Online Party Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f4f6;
+            --card-bg: #ffffff;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --insta-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            --btn-success: #48bb78;
+            --btn-danger: #f56565;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .game-container { width: 100%; max-width: 500px; background: var(--card-bg); border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); padding: 30px; border: 1px solid var(--border-color); position: relative; }
+        .screen { display: none; flex-direction: column; gap: 20px; }
+        .screen.active { display: flex; }
+        h1.logo { font-size: 2.5rem; font-weight: 800; text-align: center; background: var(--insta-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: 1.5rem; text-align: center; }
+        .subtitle { text-align: center; color: var(--text-muted); font-size: 0.95rem; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        input, select { width: 100%; padding: 16px; border: 2px solid var(--border-color); border-radius: 14px; font-size: 1rem; outline: none; background-color: #fafafa; }
+        input:focus, select:focus { border-color: #e6683c; }
+        button { width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 1rem; font-weight: 700; cursor: pointer; min-height: 55px; }
+        .btn-gradient { background: var(--insta-gradient); color: white; }
+        .btn-outline { background: transparent; border: 2px solid var(--border-color); color: var(--text-main); }
+        .room-code-display { font-size: 2rem; font-weight: 800; letter-spacing: 4px; text-align: center; padding: 15px; background: #fffaf0; border: 2px dashed #f09433; border-radius: 14px; color: #e6683c; cursor: pointer; }
+        .player-list, .voting-grid { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
+        .player-chip { padding: 12px 16px; background: #edf2f7; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+        .secret-box { background: #f7fafc; border: 2px solid var(--border-color); border-radius: 18px; padding: 30px; text-align: center; }
+        .category-header { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 5px; }
+        .category-value { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; }
+        .word-value { font-size: 2.2rem; font-weight: 800; color: #cc2366; }
+        .imposter-alert { font-size: 2rem; font-weight: 800; color: var(--btn-danger); }
+        .live-score-bar { background: #edf2f7; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+
+    <div id="screen-main" class="screen active">
+        <h1 class="logo">Ain't Gonna Lie</h1>
+        <p class="subtitle">Enter your name and join or create a lobby.</p>
+        <div class="input-group">
+            <input type="text" id="player-name" placeholder="Your Display Name" maxlength="15">
+        </div>
+        <hr style="border: 0; border-top: 1px solid var(--border-color)">
+        <div class="input-group">
+            <label class="subtitle">Host Options</label>
+            <select id="setup-rounds">
+                <option value="3">3 Rounds</option>
+                <option value="5" selected>5 Rounds</option>
+            </select>
+            <button class="btn-gradient" onclick="createRoom()">Create New Room</button>
+        </div>
+        <div style="text-align: center; color: var(--text-muted);">— OR —</div>
+        <div class="input-group">
+            <input type="text" id="join-code" placeholder="Enter 4-Letter Code" maxlength="4" style="text-transform: uppercase; text-align: center;">
+            <button class="btn-outline" onclick="joinRoom()">Join Via Code</button>
+        </div>
+    </div>
+
+    <div id="screen-lobby" class="screen">
+        <h2>Lobby Room</h2>
+        <p class="subtitle">Click the code box to copy your link to Discord!</p>
+        <div class="room-code-display" id="lobby-code" onclick="copyInviteLink()">----</div>
+        <div>
+            <p class="subtitle" style="text-align: left; margin-bottom: 8px;">Connected Players:</p>
+            <div id="lobby-player-list" class="player-list"></div>
+        </div>
+        <button id="start-game-btn" class="btn-gradient" style="display:none;" onclick="hostStartGame()">Start Game</button>
+        <p id="waiting-msg" class="subtitle" style="display:block;">Waiting for host to start...</p>
+    </div>
+
+    <div id="screen-reveal" class="screen">
+        <div class="live-score-bar" id="reveal-round-tracker">Round 1</div>
+        <h2>Your Secret Role</h2>
+        <div class="secret-box">
+            <div class="category-header">Category</div>
+            <div class="category-value" id="reveal-category">---</div>
+            <div class="category-header">Your Private Data</div>
+            <div id="reveal-secret-content">---</div>
+        </div>
+        <button class="btn-gradient" onclick="navigateTo('screen-voting')">Find The Imposter</button>
+    </div>
+
+    <div id="screen-voting" class="screen">
+        <h2>Who is Lying?</h2>
+        <p class="subtitle">Discuss on Discord, then lock in your vote.</p>
+        <div id="voting-scoreboard" class="live-score-bar"></div>
+        <div id="voting-options" class="voting-grid"></div>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h2>Round Settled</h2>
+        <div class="secret-box" id="result-box"></div>
+        <button id="host-next-btn" class="btn-gradient" style="display:none;" onclick="hostNextRound()">Next Round</button>
+        <p id="client-next-msg" class="subtitle">Waiting for host to advance...</p>
+    </div>
+
+    <div id="screen-gameover" class="screen">
+        <h1 class="logo">Final Standings</h1>
+        <div id="final-scoreboard" class="player-list"></div>
+        <button id="host-restart-btn" class="btn-gradient" style="display:none;" onclick="hostRestartGame()">Play Again</button>
+    </div>
+
+</div>
+
+<script>
+    // URL Auto-Join detection via URL Params
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlRoomCode = urlParams.get('room');
+    if (urlRoomCode) {
+        document.getElementById('join-code').value = urlRoomCode.toUpperCase();
+    }
+
+    const socket = io();
+    let myRoomCode = "";
+    let amIHost = false;
+
+    function navigateTo(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function getName() {
+        return document.getElementById('player-name').value.trim() || "Anonymous";
+    }
+
+    function createRoom() {
+        socket.emit('createRoom', { rounds: document.getElementById('setup-rounds').value });
+    }
+
+    function joinRoom() {
+        const code = document.getElementById('join-code').value.toUpperCase().trim();
+        if(code.length !== 4) return alert("Enter a 4-letter room code!");
+        myRoomCode = code;
+        socket.emit('joinRoom', { roomCode: code, playerName: getName() });
+    }
+
+    function copyInviteLink() {
+        const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${myRoomCode}`;
+        navigator.clipboard.writeText(inviteUrl);
+        alert("Invite link copied! Send it directly to your Discord chat.");
+    }
+
+    function hostStartGame() { socket.emit('startGame', { roomCode: myRoomCode }); }
+    function hostNextRound() { socket.emit('nextRound', { roomCode: myRoomCode }); }
+    function hostRestartGame() { socket.emit('restartGame', { roomCode: myRoomCode }); }
+    function castVote(targetId) { socket.emit('castVote', { roomCode: myRoomCode, votedPlayerId: targetId }); }
+
+    // --- SOCKET LISTENERS ---
+    socket.on('roomCreated', (code) => {
+        myRoomCode = code;
+        amIHost = true;
+        socket.emit('joinRoom', { roomCode: code, playerName: getName() });
+    });
+
+    socket.on('roomUpdated', ({ roomCode, players, hostId, gameStarted }) => {
+        myRoomCode = roomCode;
+        amIHost = (socket.id === hostId);
+        
+        document.getElementById('lobby-code').innerText = roomCode;
+        document.getElementById('start-game-btn').style.display = amIHost ? 'block' : 'none';
+        document.getElementById('waiting-msg').style.display = amIHost ? 'none' : 'block';
+
+        const list = document.getElementById('lobby-player-list');
+        list.innerHTML = players.map(p => `
+            <div class="player-chip">
+                <span>${p.name} ${p.id === hostId ? '👑' : ''}</span>
+                <span style="color:var(--btn-success)">Connected</span>
+            </div>
+        `).join('');
+
+        navigateTo('screen-lobby');
+    });
+
+    socket.on('roundStarted', ({ category, word, isImposter, currentRound, maxRounds, players }) => {
+        document.getElementById('reveal-round-tracker').innerText = `Round ${currentRound} of ${maxRounds}`;
+        document.getElementById('reveal-category').innerText = category;
+        
+        const content = document.getElementById('reveal-secret-content');
+        if(isImposter) {
+            content.className = "imposter-alert";
+            content.innerText = "⚠️ YOU ARE THE IMPOSTER";
+        } else {
+            content.className = "word-value";
+            content.innerText = word;
+        }
+
+        // Setup Voting Board items inside
+        document.getElementById('voting-scoreboard').innerHTML = "Live Scores: " + players.map(p => `${p.name}: ${p.points}`).join(' | ');
+        const optionsGrid = document.getElementById('voting-options');
+        optionsGrid.innerHTML = players.map(p => `
+            <button class="btn-outline" onclick="castVote('${p.id}')">Accuse ${p.name}</button>
+        `).join('');
+
+        navigateTo('screen-reveal');
+    });
+
+    socket.on('roundResult', ({ pointsSummaryHtml, players, isGameOver }) => {
+        document.getElementById('result-box').innerHTML = pointsSummaryHtml;
+        
+        if (isGameOver) {
+            document.getElementById('host-next-btn').style.display = 'none';
+            document.getElementById('client-next-msg').innerText = "Game finished! Redirecting to Podium...";
+            setTimeout(() => {
+                const finalGrid = document.getElementById('final-scoreboard');
+                const sorted = [...players].sort((a,b) => b.points - a.points);
+                finalGrid.innerHTML = sorted.map((p, idx) => `
+                    <div class="player-chip" style="${idx===0 ? 'background:#fffaf0;' : ''}">
+                        <span><strong>${idx===0?'🥇':idx===1?'🥈':'👤'} ${p.name}</strong></span>
+                        <strong>${p.points} Pts</strong>
+                    </div>
+                `).join('');
+                document.getElementById('host-restart-btn').style.display = amIHost ? 'block' : 'none';
+                navigateTo('screen-gameover');
+            }, 4000);
+        } else {
+            document.getElementById('host-next-btn').style.display = amIHost ? 'block' : 'none';
+            document.getElementById('client-next-msg').style.display = amIHost ? 'none' : 'block';
+        }
+        navigateTo('screen-result');
+    });
+
+    socket.on('errorMsg', (msg) => alert(msg));
+</script>
+</body>
+</html>
