@@ -32,8 +32,11 @@
         .btn-gradient { background: var(--insta-gradient); color: white; }
         .btn-outline { background: transparent; border: 2px solid var(--border-color); color: var(--text-main); }
         .room-code-display { font-size: 2rem; font-weight: 800; letter-spacing: 4px; text-align: center; padding: 15px; background: #fffaf0; border: 2px dashed #f09433; border-radius: 14px; color: #e6683c; cursor: pointer; }
-        .player-list, .voting-grid { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
+        .player-list, .voting-grid, .hint-board { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
         .player-chip { padding: 12px 16px; background: #edf2f7; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+        .hint-card { padding: 12px 16px; background: #fffaf0; border: 1px solid #feebc8; border-radius: 12px; display: flex; flex-direction: column; gap: 4px; }
+        .hint-card .p-name { font-size: 0.85rem; font-weight: 700; color: #dd6b20; text-transform: uppercase; }
+        .hint-card .p-text { font-size: 1.15rem; font-weight: 800; color: var(--text-main); }
         .secret-box { background: #f7fafc; border: 2px solid var(--border-color); border-radius: 18px; padding: 30px; text-align: center; }
         .category-header { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 5px; }
         .category-value { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; }
@@ -47,7 +50,7 @@
 <div class="game-container">
 
     <div id="screen-main" class="screen active">
-        <h1 class="logo">AGL</h1>
+        <h1 class="logo">Ain't Gonna Lie</h1>
         <p class="subtitle">Enter your name and join or create a lobby.</p>
         <div class="input-group">
             <input type="text" id="player-name" placeholder="Your Display Name" maxlength="15">
@@ -90,12 +93,25 @@
             <div class="category-header">Your Private Data</div>
             <div id="reveal-secret-content">---</div>
         </div>
-        <button class="btn-gradient" onclick="navigateTo('screen-voting')">Find The Imposter</button>
+        
+        <div class="input-group" id="hint-submission-zone">
+            <label class="subtitle" style="text-align:left; font-weight:700;">Write Your Hint:</label>
+            <input type="text" id="player-hint-input" placeholder="Example: 'long' for elephant" maxlength="25">
+            <button class="btn-gradient" id="submit-hint-btn" onclick="submitMyHint()">Submit Secret Hint</button>
+        </div>
+        
+        <div id="hint-waiting-zone" style="display:none; text-align:center; flex-direction: column; gap: 15px;">
+            <p class="subtitle" id="hint-progress-text">Waiting for players to write... (0/0)</p>
+            <button id="host-reveal-btn" class="btn-gradient" style="display:none;" onclick="hostRevealAllHints()">Reveal All Hints ➔</button>
+        </div>
     </div>
 
     <div id="screen-voting" class="screen">
-        <h2>Who is Lying?</h2>
-        <p id="voting-instruction-text" class="subtitle">Discuss out loud, then lock in your vote.</p>
+        <h2>Analyze The Hints</h2>
+        <p id="voting-instruction-text" class="subtitle">Look at what everyone wrote, spot the liar!</p>
+        
+        <div class="hint-board" id="revealed-hints-board"></div>
+        
         <div id="voting-scoreboard" class="live-score-bar"></div>
         <div id="voting-options" class="voting-grid"></div>
     </div>
@@ -149,16 +165,33 @@
     function copyInviteLink() {
         const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${myRoomCode}`;
         navigator.clipboard.writeText(inviteUrl);
-        alert("Invite link copied! Send it directly to your group.");
+        alert("Invite link copied!");
     }
 
     function hostStartGame() { socket.emit('startGame', { roomCode: myRoomCode }); }
     function hostNextRound() { socket.emit('nextRound', { roomCode: myRoomCode }); }
     function hostRestartGame() { socket.emit('restartGame', { roomCode: myRoomCode }); }
     
+    function submitMyHint() {
+        const txt = document.getElementById('player-hint-input').value.trim();
+        if(!txt) return alert("Please type a hint before submitting!");
+        
+        document.getElementById('hint-submission-zone').style.display = 'none';
+        document.getElementById('hint-waiting-zone').style.display = 'flex';
+        
+        // Show next button to host immediately so they have total override power
+        document.getElementById('host-reveal-btn').style.display = amIHost ? 'block' : 'none';
+        
+        socket.emit('submitHint', { roomCode: myRoomCode, hintText: txt });
+    }
+
+    function hostRevealAllHints() {
+        socket.emit('revealHints', { roomCode: myRoomCode });
+    }
+
     function castVote(targetId) { 
         if (!amIHost) {
-            alert("Only the Room Host can lock in the final group accusation! Tell your host who to click.");
+            alert("Only the Host can lock in the group's choice!");
             return;
         }
         socket.emit('castVote', { roomCode: myRoomCode, votedPlayerId: targetId }); 
@@ -194,6 +227,11 @@
         document.getElementById('reveal-round-tracker').innerText = `Round ${currentRound} of ${maxRounds}`;
         document.getElementById('reveal-category').innerText = category;
         
+        document.getElementById('player-hint-input').value = "";
+        document.getElementById('hint-submission-zone').style.display = 'flex';
+        document.getElementById('hint-waiting-zone').style.display = 'none';
+        document.getElementById('host-reveal-btn').style.display = 'none';
+
         const content = document.getElementById('reveal-secret-content');
         if(isImposter) {
             content.className = "imposter-alert";
@@ -203,18 +241,34 @@
             content.innerText = word;
         }
 
-        // Adjust description based on host power status
+        document.getElementById('voting-scoreboard').innerHTML = "Live Scores: " + players.map(p => `${p.name}: ${p.points}`).join(' | ');
+        navigateTo('screen-reveal');
+    });
+
+    socket.on('hintSubmissionProgress', ({ submittedCount, totalCount }) => {
+        document.getElementById('hint-progress-text').innerText = `Waiting for players to write... (${submittedCount}/${totalCount})`;
+        // Ensure host button shows up even if host submits hint last
+        if (amIHost && document.getElementById('hint-waiting-zone').style.display === 'flex') {
+            document.getElementById('host-reveal-btn').style.display = 'block';
+        }
+    });
+
+    socket.on('allHintsSubmitted', ({ players }) => {
+        const board = document.getElementById('revealed-hints-board');
+        board.innerHTML = players.map(p => `
+            <div class="hint-card">
+                <div class="p-name">${p.name}</div>
+                <div class="p-text">"${p.hint}"</div>
+            </div>
+        `).join('');
+
         const instructionText = document.getElementById('voting-instruction-text');
         if (amIHost) {
-            instructionText.innerHTML = "<strong>You are the Host.</strong> Talk out loud, then click a player to submit your group's final choice!";
+            instructionText.innerHTML = "<strong>You are the Host.</strong> Analyze the clues with your group, then click a suspect below!";
         } else {
-            instructionText.innerText = "Discuss with the group, then tell the Host who to vote for!";
+            instructionText.innerText = "Spot the imposter's clue and tell the Host who to accuse!";
         }
 
-        // Setup Scoreboard
-        document.getElementById('voting-scoreboard').innerHTML = "Live Scores: " + players.map(p => `${p.name}: ${p.points}`).join(' | ');
-        
-        // Setup Voting buttons
         const optionsGrid = document.getElementById('voting-options');
         optionsGrid.innerHTML = players.map(p => `
             <button class="btn-outline" style="${!amIHost ? 'opacity: 0.6; cursor: not-allowed;' : ''}" onclick="castVote('${p.id}')">
@@ -222,7 +276,7 @@
             </button>
         `).join('');
 
-        navigateTo('screen-reveal');
+        navigateTo('screen-voting');
     });
 
     socket.on('roundResult', ({ pointsSummaryHtml, players, isGameOver }) => {
@@ -230,7 +284,7 @@
         
         if (isGameOver) {
             document.getElementById('host-next-btn').style.display = 'none';
-            document.getElementById('client-next-msg').innerText = "Game finished! Redirecting to Podium...";
+            document.getElementById('client-next-msg').innerText = "Game finished! Loading standings...";
             setTimeout(() => {
                 const finalGrid = document.getElementById('final-scoreboard');
                 const sorted = [...players].sort((a,b) => b.points - a.points);
