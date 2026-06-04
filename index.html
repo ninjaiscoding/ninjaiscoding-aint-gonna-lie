@@ -22,7 +22,9 @@
         .game-container { width: 100%; max-width: 500px; background: var(--card-bg); border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); padding: 30px; border: 1px solid var(--border-color); position: relative; }
         .screen { display: none; flex-direction: column; gap: 20px; }
         .screen.active { display: flex; }
+        .logo-container { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 4px; }
         h1.logo { font-size: 2.5rem; font-weight: 800; text-align: center; background: var(--insta-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .v-tag { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); background: #e2e8f0; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { font-size: 1.5rem; text-align: center; }
         .subtitle { text-align: center; color: var(--text-muted); font-size: 0.95rem; }
         .p-badge { font-size: 0.75rem; background: #e2e8f0; color: #4a5568; padding: 2px 6px; border-radius: 6px; font-weight: 700; margin-left: 6px; }
@@ -42,47 +44,55 @@
         .secret-box { background: #f7fafc; border: 2px solid var(--border-color); border-radius: 18px; padding: 30px; text-align: center; }
         .live-score-bar { background: #edf2f7; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-align: center; }
         .turn-banner { padding: 10px; border-radius: 10px; text-align: center; font-weight: 700; font-size: 0.95rem; background: #feebc8; color: #c05621; border: 1px solid #fbd38d; }
-
-        .logo-container {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 4px;
-}
-.v-tag {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    background: #e2e8f0;
-    padding: 2px 6px;
-    border-radius: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-    
     </style>
 </head>
 <body>
 
 <div class="game-container">
 
-   <div id="screen-main" class="screen active">
-    <div class="logo-container">
-        <h1 class="logo">Ain't Gonna Lie</h1>
-        <span class="v-tag">v1.2.0</span>
-    </div>
-    <p class="subtitle">Enter your name and join or create a lobby.</p>
+    <div id="screen-main" class="screen active">
+        <div class="logo-container">
+            <h1 class="logo">Ain't Gonna Lie</h1>
+            <span class="v-tag">v1.2.0</span>
+        </div>
+        <p class="subtitle">Enter your name and join or create a lobby.</p>
         <div class="input-group">
             <input type="text" id="player-name" placeholder="Your Display Name" maxlength="15">
         </div>
         <hr style="border: 0; border-top: 1px solid var(--border-color)">
         <div class="input-group">
-            <label class="subtitle">Host Options</label>
+            <label class="subtitle" style="text-align:left; font-weight:700;">Host Configurations</label>
             <select id="setup-rounds">
                 <option value="3">3 Rounds</option>
                 <option value="5" selected>5 Rounds</option>
                 <option value="10">10 Rounds</option>
+            </select>
+            <select id="setup-category">
+                <option value="all" selected>All Categories (Rotation)</option>
+                <option value="random">🎲 Random Mode (Locks 1 Cat For Game)</option>
+                <option value="Animals">Animals</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Countries">Countries (Cleaned List)</option>
+                <option value="Food">Food</option>
+                <option value="Sports">Sports</option>
+                <option value="Fruits">Fruits</option>
+                <option value="Vegetables">Vegetables</option>
+                <option value="Clothing">Clothing</option>
+                <option value="School Subjects">School Subjects</option>
+                <option value="Jobs">Jobs</option>
+                <option value="Colors">Colors</option>
+                <option value="Vehicles">Vehicles</option>
+                <option value="Furniture">Furniture</option>
+                <option value="Musical Instruments">Musical Instruments</option>
+                <option value="Hobbies">Hobbies</option>
+                <option value="Weather">Weather</option>
+                <option value="Family Members">Family Members</option>
+                <option value="Rooms in a House">Rooms in a House</option>
+                <option value="Shapes and Space">Shapes and Space</option>
+                <option value="Toys and Games">Toys and Games</option>
+                <option value="Video Games">Video Games 🎮</option>
+                <option value="Anime">Anime 🥷</option>
+                <option value="Cartoon">Cartoon 🦸</option>
             </select>
             <button class="btn-gradient" onclick="createRoom()">Create New Room</button>
         </div>
@@ -174,7 +184,13 @@
     }
 
     function getName() { return document.getElementById('player-name').value.trim() || "Anonymous"; }
-    function createRoom() { socket.emit('createRoom', { rounds: document.getElementById('setup-rounds').value }); }
+    
+    function createRoom() { 
+        socket.emit('createRoom', { 
+            rounds: document.getElementById('setup-rounds').value,
+            categoryMode: document.getElementById('setup-category').value
+        }); 
+    }
     
     function joinRoom() {
         const code = document.getElementById('join-code').value.toUpperCase().trim();
@@ -238,7 +254,6 @@
         
         navigateTo('screen-reveal');
 
-        // Render Secret Card Display Content
         const content = document.getElementById('reveal-secret-content');
         if(isImposter) {
             content.className = "imposter-alert";
@@ -250,7 +265,6 @@
             content.innerText = word;
         }
 
-        // Display Live Answer Stream Wall 
         const stream = document.getElementById('live-stream-hints');
         const submittedPlayers = players.filter(p => p.hint !== "");
         if (submittedPlayers.length === 0) {
@@ -264,7 +278,6 @@
             `).join('');
         }
 
-        // Turn Logic System
         const banner = document.getElementById('current-turn-banner');
         const inputZone = document.getElementById('hint-submission-zone');
         const waitingZone = document.getElementById('hint-waiting-zone');
