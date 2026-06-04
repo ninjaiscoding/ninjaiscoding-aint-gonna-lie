@@ -32,7 +32,7 @@ const gameDatabase = {
     "Toys and Games": ["Doll", "ActionFigure", "Lego", "Blocks", "Puzzle", "Car", "Train", "Plane", "Ball", "Bat", "TeddyBear", "Plushie", "Robot", "Slime", "PlayDough", "Crayons", "Markers", "Paint", "YoYo", "Kite", "Frisbee", "Marble", "Dice", "Cards", "Chess", "Checkers", "Monopoly", "Scrabble", "Dominoes", "VideoGame", "Console", "Controller", "Headset", "Bicycle", "Scooter", "Skateboard", "Trampoline", "Swing", "Slide", "Sandbox", "WaterGun", "NerfGun", "RubiksCube", "Spinner", "Bubble", "Balloon", "Top", "CardGame", "BoardGame", "ToySoldier"],
     "Video Games": ["Minecraft", "GTA", "Fortnite", "Valorant", "FIFA", "Pokemon", "PacMan", "Tetris", "CallOfDuty", "AssassinCreed", "Cyberpunk", "Witcher", "EldenRing", "Skyrim", "Spiderman", "Halo", "Uncharted", "GodOfWar", "Overwatch", "Roblox", "ApexLegends", "AmongUs", "Zelda", "MarioKart", "Sonic", "Doom", "ResidentEvil", "MortalKombat", "StreetFighter", "Tekken", "Fallout", "DarkSouls", "RedDead", "FinalFantasy", "ClashRoyale", "SubwaySurfers", "AngryBirds", "CandyCrush", "PUBG", "FreeFire", "BrawlStars", "Terraria", "Destiny", "Borderlands", "BioShock", "TombRaider", "JustDance", "Sims", "AnimalCrossing", "StardewValley"],
     "Anime": ["Naruto", "OnePiece", "DragonBall", "Bleach", "DeathNote", "AttackOnTitan", "DemonSlayer", "JujutsuKaisen", "MyHeroAcademia", "HunterXHunter", "FullmetalAlchemist", "SteinsGate", "TokyoGhoul", "OnePunchMan", "BlackClover", "SwordArtOnline", "ChainsawMan", "CyberpunkEdgerunners", "Monster", "CodeGeass", "CowboyBebop", "NeonGenesisEvangelion", "MobPsycho", "Haikyuu", "KurokoNoBasket", "BlueLock", "SlamDunk", "YourName", "SpiritedAway", "VinlandSaga", "FireForce", "SoulEater", "FairyTail", "Boruto", "SpyXFamily", "KaijuNo8", "SoloLeveling", "DrStone", "TokyoRevengers", "JoJo", "Gintama", "Parasyte", "PsychoPass", "Erased", "YourLieInApril", "Dororo", "BlueExorcist", "Hellsing", "Overlord", "ReZero"],
-    "Cartoon": ["Ben10", "RickAndMorty", "TomAndJerry", "ScoobyDoo", "LooneyTunes", "SpongeBob", "Simpsons", "FamilyGuy", "SouthPark", "BoJackHorseman", "Avatar", "PhineasAndFerb", "GravityFalls", "RegularShow", "AdventureTime", "AmazingWorldOfGumball", "TeenTitans", "Batman", "SpiderMan", "JusticeLeague", "PowerpuffGirls", "DexterLaboratory", "JohnnyBravo", "CourageTheCowardlyDog", "EdEddnEddy", "DannyPhantom", "FairlyOddParents", "SpongeBob", "Futurama", "AmericanDad", "InvaderZim", "SamuraiJack", "StarWarsCloneWars", "XMen", "Transformers", "Popeye", "TheFlintstones", "WeBareBears", "StevenUniverse", "StarVsForcesOfEvil", "MiraculousLadybug", "KungFuPanda", "PenguinsOfMadagascar", "TotalDrama", "KickButtowski", "KimPossible", "CodenameKidsNextDoor", "FosterHome", "GrimAdventures", "GeneratorRex"]
+    "Cartoon": ["Ben10", "RickAndMorty", "TomAndJerry", "ScoobyDoo", "LooneyTunes", "SpongeBob", "Simpsons", "FamilyGuy", "SouthPark", "BoJackHorseman", "Avatar", "PhineasAndFerb", "GravityFalls", "RegularShow", "AdventureTime", "AmazingWorldOfGumball", "TeenTitans", "Batman", "SpiderMan", "JusticeLeague", "PowerpuffGirls", "DexterLaboratory", "JohnnyBravo", "CourageTheCowardlyDog", "EdEddnEddy", "DannyPhantom", "FairlyOddParents", "Futurama", "AmericanDad", "InvaderZim", "SamuraiJack", "StarWarsCloneWars", "XMen", "Transformers", "Popeye", "TheFlintstones", "WeBareBears", "StevenUniverse", "StarVsForcesOfEvil", "MiraculousLadybug", "KungFuPanda", "PenguinsOfMadagascar", "TotalDrama", "KickButtowski", "KimPossible", "CodenameKidsNextDoor", "FosterHome", "GrimAdventures", "GeneratorRex"]
 };
 
 const rooms = {};
@@ -47,7 +47,7 @@ io.on('connection', (socket) => {
             const keys = Object.keys(gameDatabase);
             lockedCategory = keys[Math.floor(Math.random() * keys.length)];
         } else if (categoryMode !== "all") {
-            lockedCategory = categoryMode; // Specific locked selection
+            lockedCategory = categoryMode;
         }
 
         rooms[roomCode] = {
@@ -63,7 +63,7 @@ io.on('connection', (socket) => {
             playedCombinations: [],
             currentTurnIndex: 0,
             categoryMode: categoryMode, 
-            lockedCategory: lockedCategory // Remains uniform if non-null
+            lockedCategory: lockedCategory
         };
         socket.emit('roomCreated', roomCode);
     });
@@ -74,16 +74,21 @@ io.on('connection', (socket) => {
         if (room.gameStarted) return socket.emit('errorMsg', 'Game already in progress.');
         if (room.players.length >= 10) return socket.emit('errorMsg', 'Room is full.');
 
-        const newPlayer = {
-            id: socket.id,
-            name: playerName || `Player ${room.players.length + 1}`,
-            points: 0,
-            isImposter: false,
-            hint: "",
-            pNumber: room.players.length + 1
-        };
+        const existingPlayerIndex = room.players.findIndex(p => p.id === socket.id);
+        if (existingPlayerIndex === -1) {
+            const newPlayer = {
+                id: socket.id,
+                name: playerName || `Player ${room.players.length + 1}`,
+                points: 0,
+                isImposter: false,
+                hint: "",
+                pNumber: room.players.length + 1
+            };
+            room.players.push(newPlayer);
+        } else {
+            room.players[existingPlayerIndex].name = playerName || room.players[existingPlayerIndex].name;
+        }
 
-        room.players.push(newPlayer);
         socket.join(roomCode);
         
         io.to(roomCode).emit('roomUpdated', {
@@ -103,6 +108,7 @@ io.on('connection', (socket) => {
 
     function startNewRound(roomCode) {
         const room = rooms[roomCode];
+        if (!room) return;
         const categories = Object.keys(gameDatabase);
         
         let chosenCategory = "";
@@ -110,7 +116,6 @@ io.on('connection', (socket) => {
         let attempts = 0;
 
         while (attempts < 100) {
-            // Determine active category selection strategy
             if (room.lockedCategory) {
                 chosenCategory = room.lockedCategory;
             } else {
@@ -144,6 +149,7 @@ io.on('connection', (socket) => {
 
     function emitTurnState(roomCode) {
         const room = rooms[roomCode];
+        if (!room) return;
         const activePlayer = room.players[room.currentTurnIndex];
 
         room.players.forEach((player) => {
@@ -224,25 +230,21 @@ io.on('connection', (socket) => {
         room.currentRound++;
         startNewRound(roomCode);
     });
-socket.on('restartGame', ({ roomCode }) => {
+
+    socket.on('restartGame', ({ roomCode }) => {
         const room = rooms[roomCode];
         if (!room || room.hostId !== socket.id) return;
 
         room.currentRound = 1;
         room.gameStarted = false;
-        room.players.forEach(p => { 
-            p.points = 0; 
-            p.hint = ""; 
-        });
+        room.players.forEach(p => { p.points = 0; p.hint = ""; });
         room.playedCombinations = [];
 
-        // Re-roll category if they were on random mode
         if (room.categoryMode === "random") {
             const keys = Object.keys(gameDatabase);
             room.lockedCategory = keys[Math.floor(Math.random() * keys.length)];
         }
         
-        // Let everyone know the game has reset back to the lobby screen
         io.to(roomCode).emit('gameRestartedByHost', {
             roomCode,
             players: room.players,
@@ -250,7 +252,8 @@ socket.on('restartGame', ({ roomCode }) => {
             gameStarted: room.gameStarted
         });
     });
-socket.on('disconnect', () => {
+
+    socket.on('disconnect', () => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
             const pIdx = room.players.findIndex(p => p.id === socket.id);
@@ -273,7 +276,7 @@ socket.on('disconnect', () => {
             }
         }
     });
-}); // <--- Make sure this bracket + parenthesis closes io.on('connection')
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
