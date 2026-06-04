@@ -260,12 +260,11 @@ First, update your `MapsTo` function so it hides or shows the emergency reset bu
 
     socket.on('gameRestartedByHost', ({ roomCode, players, hostId, gameStarted }) => {
         alert("The host has reset the match! Returning to lobby.");
-        
-        // Clear out old UI inputs
         document.getElementById('player-hint-input').value = "";
         
-        // This instantly updates the lobby list and sends them to screen-lobby
+        myRoomCode = roomCode;
         amIHost = (socket.id === hostId);
+        
         document.getElementById('lobby-code').innerText = roomCode;
         document.getElementById('start-game-btn').style.display = amIHost ? 'block' : 'none';
         document.getElementById('waiting-msg').style.display = amIHost ? 'none' : 'block';
