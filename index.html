@@ -166,7 +166,7 @@
     </div>
 
     <button id="host-emergency-reset-btn" class="btn-outline" style="display:none; margin-top:15px; border-color:var(--btn-danger); color:var(--btn-danger); padding:10px; min-height:40px; font-size:0.85rem;" onclick="hostRestartGame()">
-        🚨 Force Reset Game to Lobby
+        🚨 Reset Game to Lobby
     </button>
 
 </div>
@@ -243,7 +243,6 @@
     });
 
     socket.on('gameRestartedByHost', ({ roomCode, players, hostId, gameStarted }) => {
-        alert("The host has reset the match! Returning to lobby.");
         document.getElementById('player-hint-input').value = "";
         
         myRoomCode = roomCode;
